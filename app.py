@@ -7,8 +7,14 @@ import os
 import tempfile
 from datetime import datetime
 import uuid
+from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['UPLOAD_FOLDER'] = 'uploads'
+
+# Create uploads directory if it doesn't exist
+os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Global storage for scan sessions
 scan_sessions = {}
@@ -81,20 +87,35 @@ def index():
 
 @app.route('/start_scan', methods=['POST'])
 def start_scan():
-    data = request.json
-    target_url = data.get('target_url', '').rstrip('/')
-    wordlist_text = data.get('wordlist', '')
-    extensions_text = data.get('extensions', '')
+    target_url = request.form.get('target_url', '').rstrip('/')
+    wordlist_text = request.form.get('wordlist', '')
+    extensions_text = request.form.get('extensions', '')
+    wordlist_file = request.files.get('wordlist_file')
     
-    if not target_url or not wordlist_text:
-        return jsonify({'error': 'Target URL and wordlist are required'}), 400
+    if not target_url:
+        return jsonify({'error': 'Target URL is required'}), 400
     
-    # Generate session ID
-    session_id = str(uuid.uuid4())
+    # Handle wordlist from either text input or file upload
+    paths = []
     
-    # Parse wordlist
-    paths = [line.strip() for line in wordlist_text.split('\n') 
-             if line.strip() and not line.strip().startswith('#')]
+    if wordlist_file and wordlist_file.filename:
+        # Process uploaded file
+        try:
+            filename = secure_filename(wordlist_file.filename)
+            if filename.endswith(('.txt', '.list', '.wordlist')):
+                file_content = wordlist_file.read().decode('utf-8', errors='ignore')
+                paths = [line.strip() for line in file_content.split('\n') 
+                        if line.strip() and not line.strip().startswith('#')]
+            else:
+                return jsonify({'error': 'Invalid file type. Please upload .txt, .list, or .wordlist files'}), 400
+        except Exception as e:
+            return jsonify({'error': f'Error reading file: {str(e)}'}), 400
+    elif wordlist_text:
+        # Process text input
+        paths = [line.strip() for line in wordlist_text.split('\n') 
+                if line.strip() and not line.strip().startswith('#')]
+    else:
+        return jsonify({'error': 'Wordlist (text or file) is required'}), 400
     
     if not paths:
         return jsonify({'error': 'Wordlist is empty or invalid'}), 400
@@ -102,6 +123,9 @@ def start_scan():
     # Parse extensions
     extensions = [ext.strip() for ext in extensions_text.split(',') 
                   if ext.strip()] if extensions_text else []
+    
+    # Generate session ID
+    session_id = str(uuid.uuid4())
     
     # Create scanner instance
     scanner = WebScanner(session_id)
@@ -118,7 +142,8 @@ def start_scan():
     return jsonify({
         'session_id': session_id,
         'message': 'Scan started successfully',
-        'total_paths': len(paths)
+        'total_paths': len(paths),
+        'wordlist_source': 'file' if wordlist_file and wordlist_file.filename else 'text'
     })
 
 @app.route('/scan_status/<session_id>')

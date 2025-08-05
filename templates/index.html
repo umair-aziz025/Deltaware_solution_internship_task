@@ -57,7 +57,7 @@
             font-weight: 600;
         }
 
-        .form-group input, .form-group textarea {
+        .form-group input, .form-group textarea, .form-group select {
             width: 100%;
             padding: 12px;
             border: none;
@@ -70,6 +70,56 @@
 
         .form-group input::placeholder, .form-group textarea::placeholder {
             color: rgba(255, 255, 255, 0.6);
+        }
+
+        .form-group input[type="file"] {
+            padding: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px dashed rgba(255, 255, 255, 0.3);
+        }
+
+        .form-group input[type="file"]::-webkit-file-upload-button {
+            background: linear-gradient(45deg, #00ff88, #00b4ff);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+
+        .wordlist-options {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .wordlist-option-btn {
+            padding: 8px 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .wordlist-option-btn.active {
+            background: linear-gradient(45deg, #00ff88, #00b4ff);
+            border-color: transparent;
+        }
+
+        .wordlist-option-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .wordlist-section {
+            display: none;
+        }
+
+        .wordlist-section.active {
+            display: block;
         }
 
         .form-group textarea {
@@ -227,22 +277,38 @@
 
         <div id="alert-container"></div>
 
-        <form id="scanForm">
+        <form id="scanForm" enctype="multipart/form-data">
             <div class="grid">
                 <div class="form-group">
                     <label for="targetUrl">Target URL:</label>
-                    <input type="url" id="targetUrl" placeholder="https://example.com" required>
+                    <input type="url" id="targetUrl" name="target_url" placeholder="https://example.com" required>
                 </div>
 
                 <div class="form-group">
                     <label for="extensions">Extensions (optional):</label>
-                    <input type="text" id="extensions" placeholder=".php, .html, .asp">
+                    <input type="text" id="extensions" name="extensions" placeholder=".php, .html, .asp">
                 </div>
             </div>
 
             <div class="form-group">
-                <label for="wordlist">Wordlist (one path per line):</label>
-                <textarea id="wordlist" placeholder="admin&#10;login&#10;backup&#10;config&#10;uploads&#10;test&#10;dashboard&#10;panel" required></textarea>
+                <label>Wordlist Options:</label>
+                <div class="wordlist-options">
+                    <button type="button" class="wordlist-option-btn active" id="textOption">Enter Text</button>
+                    <button type="button" class="wordlist-option-btn" id="fileOption">Upload File</button>
+                </div>
+                
+                <div class="wordlist-section active" id="textSection">
+                    <label for="wordlist">Wordlist (one path per line):</label>
+                    <textarea id="wordlist" name="wordlist" placeholder="admin&#10;login&#10;backup&#10;config&#10;uploads&#10;test&#10;dashboard&#10;panel"></textarea>
+                </div>
+                
+                <div class="wordlist-section" id="fileSection">
+                    <label for="wordlistFile">Upload Wordlist File (.txt, .list, .wordlist):</label>
+                    <input type="file" id="wordlistFile" name="wordlist_file" accept=".txt,.list,.wordlist">
+                    <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                        📁 Upload a text file containing one path per line
+                    </small>
+                </div>
             </div>
 
             <button type="submit" class="btn" id="startBtn">Start Scan</button>
@@ -361,22 +427,32 @@
         document.getElementById('scanForm').addEventListener('submit', function(e) {
             e.preventDefault();
             
-            const targetUrl = document.getElementById('targetUrl').value;
-            const wordlist = document.getElementById('wordlist').value;
-            const extensions = document.getElementById('extensions').value;
+            const formData = new FormData();
+            formData.append('target_url', document.getElementById('targetUrl').value);
+            formData.append('extensions', document.getElementById('extensions').value);
             
-            const data = {
-                target_url: targetUrl,
-                wordlist: wordlist,
-                extensions: extensions
-            };
+            // Check which wordlist option is active
+            const isFileMode = document.getElementById('fileOption').classList.contains('active');
+            
+            if (isFileMode) {
+                const fileInput = document.getElementById('wordlistFile');
+                if (fileInput.files.length === 0) {
+                    showAlert('Please select a wordlist file or switch to text mode.');
+                    return;
+                }
+                formData.append('wordlist_file', fileInput.files[0]);
+            } else {
+                const wordlistText = document.getElementById('wordlist').value;
+                if (!wordlistText.trim()) {
+                    showAlert('Please enter a wordlist or switch to file mode.');
+                    return;
+                }
+                formData.append('wordlist', wordlistText);
+            }
             
             fetch('/start_scan', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify(data)
+                body: formData
             })
             .then(response => response.json())
             .then(data => {
@@ -390,7 +466,8 @@
                     document.getElementById('downloadBtn').style.display = 'none';
                     
                     clearResults();
-                    showAlert(`Scan started! Testing ${data.total_paths} paths.`, 'success');
+                    const source = data.wordlist_source === 'file' ? 'uploaded file' : 'text input';
+                    showAlert(`Scan started! Testing ${data.total_paths} paths from ${source}.`, 'success');
                     
                     statusInterval = setInterval(checkScanStatus, 1000);
                 }
@@ -439,6 +516,31 @@ contact
 about
 services
 products`;
+
+        // Wordlist option switching
+        document.getElementById('textOption').addEventListener('click', function() {
+            document.getElementById('textOption').classList.add('active');
+            document.getElementById('fileOption').classList.remove('active');
+            document.getElementById('textSection').classList.add('active');
+            document.getElementById('fileSection').classList.remove('active');
+        });
+
+        document.getElementById('fileOption').addEventListener('click', function() {
+            document.getElementById('fileOption').classList.add('active');
+            document.getElementById('textOption').classList.remove('active');
+            document.getElementById('fileSection').classList.add('active');
+            document.getElementById('textSection').classList.remove('active');
+        });
+
+        // File input change handler
+        document.getElementById('wordlistFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const fileName = file.name;
+                const fileSize = (file.size / 1024).toFixed(2);
+                showAlert(`Selected file: ${fileName} (${fileSize} KB)`, 'success');
+            }
+        });
     </script>
 </body>
 </html>
