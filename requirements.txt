@@ -1,0 +1,12 @@
+requests
+beautifulsoup4
+scapy
+pynput
+PyJWT
+Pillow
+PyPDF2
+paramiko
+googlesearch-python
+Flask==2.3.3
+gunicorn==21.2.0
+customtkinter

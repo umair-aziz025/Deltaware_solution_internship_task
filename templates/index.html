@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web Directory Bruteforcer</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            background: linear-gradient(45deg, #00ff88, #00b4ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .header p {
+            opacity: 0.8;
+            font-size: 1.1em;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .form-group input, .form-group textarea {
+            width: 100%;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 16px;
+            backdrop-filter: blur(5px);
+        }
+
+        .form-group input::placeholder, .form-group textarea::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .form-group textarea {
+            resize: vertical;
+            min-height: 120px;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #00ff88, #00b4ff);
+            color: #fff;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            margin-right: 10px;
+            margin-bottom: 10px;
+            transition: transform 0.2s;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .btn-danger {
+            background: linear-gradient(45deg, #ff4757, #ff3838);
+        }
+
+        .progress-container {
+            margin: 20px 0;
+            display: none;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #00ff88, #00b4ff);
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .status {
+            margin-top: 10px;
+            font-weight: 600;
+        }
+
+        .results-container {
+            margin-top: 30px;
+        }
+
+        .results-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .results-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 20px;
+            min-height: 300px;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+        }
+
+        .result-item {
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+        }
+
+        .result-url {
+            color: #00ff88;
+            font-weight: 600;
+        }
+
+        .result-status {
+            color: #00b4ff;
+        }
+
+        .result-time {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 0.9em;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 30px;
+            opacity: 0.7;
+            font-style: italic;
+        }
+
+        .alert {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .alert-error {
+            background: rgba(255, 71, 87, 0.2);
+            border: 1px solid #ff4757;
+        }
+
+        .alert-success {
+            background: rgba(0, 255, 136, 0.2);
+            border: 1px solid #00ff88;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .container {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Web Directory Bruteforcer</h1>
+            <p>Discover hidden directories and files on web servers</p>
+        </div>
+
+        <div id="alert-container"></div>
+
+        <form id="scanForm">
+            <div class="grid">
+                <div class="form-group">
+                    <label for="targetUrl">Target URL:</label>
+                    <input type="url" id="targetUrl" placeholder="https://example.com" required>
+                </div>
+
+                <div class="form-group">
+                    <label for="extensions">Extensions (optional):</label>
+                    <input type="text" id="extensions" placeholder=".php, .html, .asp">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="wordlist">Wordlist (one path per line):</label>
+                <textarea id="wordlist" placeholder="admin&#10;login&#10;backup&#10;config&#10;uploads&#10;test&#10;dashboard&#10;panel" required></textarea>
+            </div>
+
+            <button type="submit" class="btn" id="startBtn">Start Scan</button>
+            <button type="button" class="btn btn-danger" id="stopBtn" style="display: none;">Stop Scan</button>
+        </form>
+
+        <div class="progress-container" id="progressContainer">
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+            </div>
+            <div class="status" id="statusText">Status: Idle</div>
+        </div>
+
+        <div class="results-container">
+            <div class="results-header">
+                <h3>Scan Results</h3>
+                <button type="button" class="btn" id="downloadBtn" style="display: none;">Download Results</button>
+            </div>
+            <div class="results-box" id="resultsBox">
+                <div style="color: rgba(255, 255, 255, 0.6); text-align: center; padding: 50px;">
+                    No scan results yet. Start a scan to see discovered directories and files.
+                </div>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p>Copyright © Made by Umair Aziz | Deltaware Internship Project</p>
+            <p>⚠️ For authorized testing only. Use responsibly and ethically.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let statusInterval = null;
+
+        function showAlert(message, type = 'error') {
+            const alertContainer = document.getElementById('alert-container');
+            const alertDiv = document.createElement('div');
+            alertDiv.className = `alert alert-${type}`;
+            alertDiv.textContent = message;
+            alertContainer.innerHTML = '';
+            alertContainer.appendChild(alertDiv);
+            
+            setTimeout(() => {
+                alertDiv.remove();
+            }, 5000);
+        }
+
+        function updateProgress(progress, status, completed, total) {
+            document.getElementById('progressFill').style.width = progress + '%';
+            document.getElementById('statusText').textContent = 
+                `Status: ${status} | Progress: ${completed}/${total} (${Math.round(progress)}%)`;
+        }
+
+        function addResult(result) {
+            const resultsBox = document.getElementById('resultsBox');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'result-item';
+            resultDiv.innerHTML = `
+                <div class="result-url">[+] Found: ${result.url}</div>
+                <div class="result-status">Status: ${result.status_code} | Time: ${result.found_at}</div>
+            `;
+            resultsBox.appendChild(resultDiv);
+            resultsBox.scrollTop = resultsBox.scrollHeight;
+        }
+
+        function clearResults() {
+            const resultsBox = document.getElementById('resultsBox');
+            resultsBox.innerHTML = '<div style="color: rgba(255, 255, 255, 0.6); text-align: center; padding: 50px;">Scanning in progress...</div>';
+        }
+
+        function checkScanStatus() {
+            if (!currentSessionId) return;
+
+            fetch(`/scan_status/${currentSessionId}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateProgress(data.progress, data.status, data.completed_paths, data.total_paths);
+                    
+                    // Add new results
+                    if (data.results && data.results.length > 0) {
+                        data.results.forEach(result => {
+                            if (!document.querySelector(`[data-url="${result.url}"]`)) {
+                                const resultDiv = document.createElement('div');
+                                resultDiv.className = 'result-item';
+                                resultDiv.setAttribute('data-url', result.url);
+                                resultDiv.innerHTML = `
+                                    <div class="result-url">[+] Found: ${result.url}</div>
+                                    <div class="result-status">Status: ${result.status_code} | Time: ${result.found_at}</div>
+                                `;
+                                document.getElementById('resultsBox').appendChild(resultDiv);
+                                document.getElementById('resultsBox').scrollTop = document.getElementById('resultsBox').scrollHeight;
+                            }
+                        });
+                    }
+                    
+                    if (data.status === 'completed' || data.status === 'stopped') {
+                        clearInterval(statusInterval);
+                        document.getElementById('startBtn').style.display = 'inline-block';
+                        document.getElementById('stopBtn').style.display = 'none';
+                        document.getElementById('downloadBtn').style.display = 'inline-block';
+                        
+                        if (data.results_count === 0) {
+                            document.getElementById('resultsBox').innerHTML = 
+                                '<div style="color: rgba(255, 255, 255, 0.6); text-align: center; padding: 50px;">No directories or files found.</div>';
+                        }
+                        
+                        showAlert(`Scan ${data.status}! Found ${data.results_count} items.`, 'success');
+                    }
+                })
+                .catch(error => {
+                    console.error('Error checking status:', error);
+                });
+        }
+
+        document.getElementById('scanForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            
+            const targetUrl = document.getElementById('targetUrl').value;
+            const wordlist = document.getElementById('wordlist').value;
+            const extensions = document.getElementById('extensions').value;
+            
+            const data = {
+                target_url: targetUrl,
+                wordlist: wordlist,
+                extensions: extensions
+            };
+            
+            fetch('/start_scan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify(data)
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    showAlert(data.error);
+                } else {
+                    currentSessionId = data.session_id;
+                    document.getElementById('startBtn').style.display = 'none';
+                    document.getElementById('stopBtn').style.display = 'inline-block';
+                    document.getElementById('progressContainer').style.display = 'block';
+                    document.getElementById('downloadBtn').style.display = 'none';
+                    
+                    clearResults();
+                    showAlert(`Scan started! Testing ${data.total_paths} paths.`, 'success');
+                    
+                    statusInterval = setInterval(checkScanStatus, 1000);
+                }
+            })
+            .catch(error => {
+                showAlert('Error starting scan: ' + error.message);
+            });
+        });
+
+        document.getElementById('stopBtn').addEventListener('click', function() {
+            if (currentSessionId) {
+                fetch(`/stop_scan/${currentSessionId}`, {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    showAlert('Scan stopped by user.', 'success');
+                });
+            }
+        });
+
+        document.getElementById('downloadBtn').addEventListener('click', function() {
+            if (currentSessionId) {
+                window.open(`/download_results/${currentSessionId}`, '_blank');
+            }
+        });
+
+        // Pre-fill with sample wordlist
+        document.getElementById('wordlist').value = `admin
+login
+backup
+config
+uploads
+test
+dashboard
+panel
+files
+images
+css
+js
+api
+docs
+help
+support
+contact
+about
+services
+products`;
+    </script>
+</body>
+</html>
