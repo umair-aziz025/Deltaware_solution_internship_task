@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Directory Bruteforcer - Simple Version</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f0f0f0;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        textarea {
+            height: 100px;
+            resize: vertical;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .results {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 5px;
+            min-height: 200px;
+            overflow-y: auto;
+            max-height: 400px;
+        }
+        .result-item {
+            margin-bottom: 10px;
+            padding: 5px;
+            background: #e9ecef;
+            border-radius: 3px;
+        }
+        .status {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .success {
+            color: #28a745;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Directory Bruteforcer</h1>
+        <p>Simple version - Discover hidden directories and files</p>
+        
+        <div class="form-group">
+            <label for="targetUrl">Target URL:</label>
+            <input type="url" id="targetUrl" placeholder="https://example.com" value="https://httpbin.org">
+        </div>
+        
+        <div class="form-group">
+            <label for="wordlist">Wordlist (one path per line):</label>
+            <textarea id="wordlist" placeholder="admin&#10;login&#10;backup">get
+post
+put
+delete
+status
+json
+xml
+html</textarea>
+        </div>
+        
+        <button id="startBtn" onclick="startScan()">Start Scan</button>
+        <button id="stopBtn" onclick="stopScan()" style="display: none;" disabled>Stop Scan</button>
+        
+        <div class="status" id="status">Ready to scan</div>
+        
+        <div class="results" id="results">
+            <p>No scan results yet. Click "Start Scan" to begin.</p>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let statusInterval = null;
+
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result-item ${type}`;
+            div.textContent = message;
+            results.appendChild(div);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function updateStatus(message, type = 'info') {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status ${type}`;
+        }
+
+        async function startScan() {
+            const targetUrl = document.getElementById('targetUrl').value;
+            const wordlist = document.getElementById('wordlist').value;
+            
+            if (!targetUrl || !wordlist) {
+                updateStatus('Please enter both target URL and wordlist', 'error');
+                return;
+            }
+
+            // Clear previous results
+            document.getElementById('results').innerHTML = '';
+            
+            try {
+                const response = await fetch('/start_scan', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        target_url: targetUrl,
+                        wordlist: wordlist
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    updateStatus(`Error: ${data.error}`, 'error');
+                    log(`❌ ${data.error}`, 'error');
+                    return;
+                }
+
+                currentSessionId = data.session_id;
+                updateStatus(`Scan started! Testing ${data.total_paths} paths...`, 'success');
+                log(`🚀 Scan started with session ID: ${currentSessionId}`, 'success');
+                
+                // Update UI
+                document.getElementById('startBtn').style.display = 'none';
+                document.getElementById('stopBtn').style.display = 'inline-block';
+                document.getElementById('stopBtn').disabled = false;
+                
+                // Start checking status
+                statusInterval = setInterval(checkStatus, 1000);
+                
+            } catch (error) {
+                updateStatus(`Error starting scan: ${error.message}`, 'error');
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+
+        async function stopScan() {
+            if (!currentSessionId) return;
+            
+            try {
+                await fetch(`/stop_scan/${currentSessionId}`, {
+                    method: 'POST'
+                });
+                
+                updateStatus('Scan stopped by user', 'error');
+                log('⏹️ Scan stopped by user', 'error');
+                resetUI();
+                
+            } catch (error) {
+                log(`❌ Error stopping scan: ${error.message}`, 'error');
+            }
+        }
+
+        async function checkStatus() {
+            if (!currentSessionId) return;
+            
+            try {
+                const response = await fetch(`/scan_status/${currentSessionId}`);
+                const data = await response.json();
+                
+                if (data.error) {
+                    updateStatus(`Status error: ${data.error}`, 'error');
+                    resetUI();
+                    return;
+                }
+                
+                updateStatus(`Status: ${data.status} | Progress: ${data.completed_paths}/${data.total_paths} | Found: ${data.results_count}`, 'success');
+                
+                // Add new results
+                if (data.results && data.results.length > 0) {
+                    data.results.forEach(result => {
+                        log(`✅ Found: ${result.url} [Status: ${result.status_code}] [Time: ${result.found_at}]`, 'success');
+                    });
+                }
+                
+                // Check if completed
+                if (data.status === 'completed' || data.status === 'stopped') {
+                    updateStatus(`Scan ${data.status}! Found ${data.results_count} items.`, 'success');
+                    log(`🎉 Scan ${data.status}! Total found: ${data.results_count}`, 'success');
+                    resetUI();
+                }
+                
+            } catch (error) {
+                console.error('Status check error:', error);
+            }
+        }
+
+        function resetUI() {
+            clearInterval(statusInterval);
+            document.getElementById('startBtn').style.display = 'inline-block';
+            document.getElementById('stopBtn').style.display = 'none';
+            currentSessionId = null;
+        }
+
+        // Test API connection on load
+        window.onload = async function() {
+            try {
+                const response = await fetch('/health');
+                const data = await response.json();
+                updateStatus(`API connected successfully (${data.environment})`, 'success');
+                log(`🔗 Connected to API: ${data.status}`, 'success');
+            } catch (error) {
+                updateStatus('Failed to connect to API', 'error');
+                log('❌ Failed to connect to API', 'error');
+            }
+        };
+    </script>
+</body>
+</html>

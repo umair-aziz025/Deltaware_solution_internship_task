@@ -267,14 +267,11 @@ def download_results(session_id):
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-# For Vercel deployment - this is the main handler
-def handler(request):
-    """Vercel serverless function handler"""
-    return app(request.environ, lambda status, headers: None)
+# For Vercel deployment - WSGI application
+app.wsgi_app = app.wsgi_app
 
-# This allows the app to work both locally and on Vercel
+# Export for Vercel
+application = app
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
-else:
-    # When imported by Vercel, expose the app
-    application = app
