@@ -38,6 +38,7 @@
             font-size: 2.5em;
             margin-bottom: 10px;
             background: linear-gradient(45deg, #00ff88, #00b4ff);
+            background-clip: text;
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
@@ -384,8 +385,19 @@
             if (!currentSessionId) return;
 
             fetch(`/scan_status/${currentSessionId}`)
-                .then(response => response.json())
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Failed to get scan status');
+                    }
+                    return response.json();
+                })
                 .then(data => {
+                    if (data.error) {
+                        showAlert('Status error: ' + data.error);
+                        clearInterval(statusInterval);
+                        return;
+                    }
+                    
                     updateProgress(data.progress, data.status, data.completed_paths, data.total_paths);
                     
                     // Add new results
@@ -420,7 +432,8 @@
                     }
                 })
                 .catch(error => {
-                    console.error('Error checking status:', error);
+                    console.error('Status check error:', error);
+                    // Don't show error messages for status checks to avoid spam
                 });
         }
 
@@ -454,7 +467,19 @@
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
+            .then(response => {
+                if (!response.ok) {
+                    return response.text().then(text => {
+                        try {
+                            const jsonData = JSON.parse(text);
+                            throw new Error(jsonData.error || 'Server error');
+                        } catch {
+                            throw new Error('Server returned: ' + text.substring(0, 100) + '...');
+                        }
+                    });
+                }
+                return response.json();
+            })
             .then(data => {
                 if (data.error) {
                     showAlert(data.error);

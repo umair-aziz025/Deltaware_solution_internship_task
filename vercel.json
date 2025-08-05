@@ -1,0 +1,35 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "./api/index.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/start_scan",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/scan_status/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/scan_results/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/stop_scan/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/download_results/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/index.py"
+    }
+  ]
+}
