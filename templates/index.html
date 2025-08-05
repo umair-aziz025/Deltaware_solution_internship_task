@@ -291,6 +291,17 @@
                 </div>
             </div>
 
+            <div class="grid">
+                <div class="form-group">
+                    <label for="threads">Threads (1-50):</label>
+                    <input type="number" id="threads" name="threads" min="1" max="50" value="10" placeholder="10">
+                    <small style="color: rgba(255, 255, 255, 0.6); display: block; margin-top: 5px;">
+                        ⚡ Higher threads = faster scanning (but may overwhelm the target)
+                    </small>
+                </div>
+                <div></div>
+            </div>
+
             <div class="form-group">
                 <label>Wordlist Options:</label>
                 <div class="wordlist-options">
@@ -443,6 +454,7 @@
             const formData = new FormData();
             formData.append('target_url', document.getElementById('targetUrl').value);
             formData.append('extensions', document.getElementById('extensions').value);
+            formData.append('threads', document.getElementById('threads').value);
             
             // Check which wordlist option is active
             const isFileMode = document.getElementById('fileOption').classList.contains('active');
@@ -492,7 +504,7 @@
                     
                     clearResults();
                     const source = data.wordlist_source === 'file' ? 'uploaded file' : 'text input';
-                    showAlert(`Scan started! Testing ${data.total_paths} paths from ${source}.`, 'success');
+                    showAlert(`Scan started! Testing ${data.total_paths} paths from ${source} using ${data.threads} threads.`, 'success');
                     
                     statusInterval = setInterval(checkScanStatus, 1000);
                 }

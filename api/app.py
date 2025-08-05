@@ -8,6 +8,7 @@ import tempfile
 from datetime import datetime
 import uuid
 import sys
+from werkzeug.utils import secure_filename
 
 # Configure Flask app for Vercel with proper template path
 template_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'templates')
@@ -45,29 +46,51 @@ class WebScanner:
             pass
         return None
     
-    def scan_worker(self, base_url, paths, extensions):
+    def scan_worker(self, base_url, paths, extensions, num_threads=10):
         self.status = "scanning"
         self.total_paths = len(paths)
         
-        with requests.Session() as session:
-            for i, path in enumerate(paths):
-                if self.stop_event.is_set():
-                    break
+        # Create a queue for paths to scan
+        path_queue = Queue()
+        for path in paths:
+            path_queue.put(path)
+        
+        # Worker function for threading
+        def worker():
+            with requests.Session() as session:
+                while not path_queue.empty() and not self.stop_event.is_set():
+                    try:
+                        path = path_queue.get_nowait()
+                    except:
+                        break
                     
-                result = self.test_url(session, f"{base_url}/{path}")
-                if result:
-                    self.results.append(result)
-                
-                if extensions:
-                    for ext in extensions:
-                        if not path.endswith(ext):
-                            result = self.test_url(session, f"{base_url}/{path}{ext}")
-                            if result:
-                                self.results.append(result)
-                
-                self.completed_paths = i + 1
-                self.progress = (self.completed_paths / self.total_paths) * 100
-                time.sleep(0.05)
+                    # Test path as is
+                    result = self.test_url(session, f"{base_url}/{path}")
+                    if result:
+                        self.results.append(result)
+                    
+                    # Test with extensions
+                    if extensions and not self.stop_event.is_set():
+                        for ext in extensions:
+                            if not path.endswith(ext):
+                                result = self.test_url(session, f"{base_url}/{path}{ext}")
+                                if result:
+                                    self.results.append(result)
+                    
+                    self.completed_paths += 1
+                    self.progress = (self.completed_paths / self.total_paths) * 100
+                    path_queue.task_done()
+        
+        # Start worker threads
+        threads = []
+        for _ in range(min(num_threads, len(paths))):
+            t = threading.Thread(target=worker, daemon=True)
+            t.start()
+            threads.append(t)
+        
+        # Wait for all threads to complete
+        for t in threads:
+            t.join()
         
         self.status = "completed" if not self.stop_event.is_set() else "stopped"
 
@@ -96,15 +119,39 @@ def start_scan():
         target_url = request.form.get('target_url', '').rstrip('/')
         wordlist_text = request.form.get('wordlist', '')
         extensions_text = request.form.get('extensions', '')
+        wordlist_file = request.files.get('wordlist_file')
+        num_threads = int(request.form.get('threads', 10))  # Default 10 threads
         
-        if not target_url or not wordlist_text:
-            return jsonify({'error': 'Target URL and wordlist are required'}), 400
+        if not target_url:
+            return jsonify({'error': 'Target URL is required'}), 400
         
-        paths = [line.strip() for line in wordlist_text.split('\n') 
-                if line.strip() and not line.strip().startswith('#')]
+        # Handle wordlist from either text input or file upload
+        paths = []
+        
+        if wordlist_file and wordlist_file.filename:
+            # Process uploaded file
+            try:
+                filename = secure_filename(wordlist_file.filename)
+                if filename.endswith(('.txt', '.list', '.wordlist')):
+                    file_content = wordlist_file.read().decode('utf-8', errors='ignore')
+                    paths = [line.strip() for line in file_content.split('\n') 
+                            if line.strip() and not line.strip().startswith('#')]
+                else:
+                    return jsonify({'error': 'Invalid file type. Please upload .txt, .list, or .wordlist files'}), 400
+            except Exception as e:
+                return jsonify({'error': f'Error reading file: {str(e)}'}), 400
+        elif wordlist_text:
+            # Process text input
+            paths = [line.strip() for line in wordlist_text.split('\n') 
+                    if line.strip() and not line.strip().startswith('#')]
+        else:
+            return jsonify({'error': 'Wordlist (text or file) is required'}), 400
         
         if not paths:
-            return jsonify({'error': 'Wordlist is empty'}), 400
+            return jsonify({'error': 'Wordlist is empty or invalid'}), 400
+        
+        # Limit threads to reasonable range
+        num_threads = max(1, min(num_threads, 50))
         
         extensions = [ext.strip() for ext in extensions_text.split(',') 
                       if ext.strip()] if extensions_text else []
@@ -115,7 +162,7 @@ def start_scan():
         
         scan_thread = threading.Thread(
             target=scanner.scan_worker,
-            args=(target_url, paths, extensions),
+            args=(target_url, paths, extensions, num_threads),
             daemon=True
         )
         scan_thread.start()
@@ -123,7 +170,9 @@ def start_scan():
         return jsonify({
             'session_id': session_id,
             'message': 'Scan started successfully',
-            'total_paths': len(paths)
+            'total_paths': len(paths),
+            'threads': num_threads,
+            'wordlist_source': 'file' if wordlist_file and wordlist_file.filename else 'text'
         })
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
