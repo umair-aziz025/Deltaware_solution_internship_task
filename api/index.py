@@ -8,21 +8,26 @@ import tempfile
 from datetime import datetime
 import uuid
 from werkzeug.utils import secure_filename
+import sys
+import json
 
 # Check if running on Vercel
-IS_VERCEL = os.environ.get('VERCEL', False)
+IS_VERCEL = os.environ.get('VERCEL') or os.environ.get('VERCEL_ENV')
 
-app = Flask(__name__, template_folder='../templates')
+# Configure Flask app for Vercel
+template_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'templates')
+app = Flask(__name__, template_folder=template_dir)
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 
 # Adjust upload folder based on environment
 if IS_VERCEL:
-    app.config['UPLOAD_FOLDER'] = '/tmp/uploads'
+    app.config['UPLOAD_FOLDER'] = '/tmp'
 else:
-    app.config['UPLOAD_FOLDER'] = '../uploads'
+    app.config['UPLOAD_FOLDER'] = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'uploads')
 
-# Create uploads directory if it doesn't exist
-os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
+# Create uploads directory if it doesn't exist and not on Vercel
+if not IS_VERCEL:
+    os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 
 # Global storage for scan sessions
 scan_sessions = {}
@@ -99,16 +104,34 @@ class WebScanner:
 
 @app.route('/')
 def index():
-    return render_template('index.html')
+    try:
+        return render_template('index.html')
+    except Exception as e:
+        # Fallback if template loading fails
+        return jsonify({
+            'error': 'Template loading failed',
+            'message': str(e),
+            'template_dir': app.template_folder,
+            'is_vercel': IS_VERCEL
+        }), 500
 
 @app.route('/health')
 def health():
     """Health check endpoint"""
-    return jsonify({
-        'status': 'healthy',
-        'environment': 'vercel' if IS_VERCEL else 'local',
-        'timestamp': datetime.now().isoformat()
-    })
+    try:
+        return jsonify({
+            'status': 'healthy',
+            'environment': 'vercel' if IS_VERCEL else 'local',
+            'timestamp': datetime.now().isoformat(),
+            'python_version': sys.version,
+            'template_folder': app.template_folder,
+            'upload_folder': app.config.get('UPLOAD_FOLDER')
+        })
+    except Exception as e:
+        return jsonify({
+            'status': 'error',
+            'error': str(e)
+        }), 500
 
 @app.route('/start_scan', methods=['POST'])
 def start_scan():
@@ -244,10 +267,14 @@ def download_results(session_id):
     except Exception as e:
         return jsonify({'error': f'Server error: {str(e)}'}), 500
 
-# For Vercel deployment
-def handler(event, context):
-    """AWS Lambda handler function for Vercel"""
-    return app(event, context)
+# For Vercel deployment - this is the main handler
+def handler(request):
+    """Vercel serverless function handler"""
+    return app(request.environ, lambda status, headers: None)
 
+# This allows the app to work both locally and on Vercel
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+else:
+    # When imported by Vercel, expose the app
+    application = app
